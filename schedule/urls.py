@@ -40,6 +40,4 @@ urlpatterns = [
 
     # Новий ендпоінт для звіту
     path('reports/teacher-load/', TeacherLoadReportView.as_view(), name='report-teacher-load'),
-
-    path('', include(router.urls)),
 ]

@@ -11,7 +11,7 @@ interface ScheduleItem {
   subject_name: string;
   teacher_name: string;
   class_name: string;
-  room: number; // ID кабінету (передається серіалізатором за замовчуванням)
+  room: number;
   room_number: string;
   day_of_week: string;
   lesson_number: number;
@@ -89,7 +89,8 @@ export default function SchedulePage() {
       if (selectedTeacher) params.append('curriculum__teacher', selectedTeacher);
 
       const response = await api.get(`/schedules/?${params.toString()}`);
-      setSchedules(response.data);
+      // Підтримка пагінації (results) або звичайного масиву
+      setSchedules(response.data.results || response.data);
     } catch (err) {
       setError('Не вдалося завантажити розклад. Перевірте з\'єднання.');
     } finally {
@@ -112,31 +113,27 @@ export default function SchedulePage() {
     router.push('/');
   };
 
-  const getLesson = (day: string, lessonNum: number) => {
-    return schedules.find(
+  // ВИПРАВЛЕНО: Тепер повертає масив усіх уроків для конкретної клітинки
+  const getLessons = (day: string, lessonNum: number) => {
+    return schedules.filter(
       (s) => s.day_of_week === day && s.lesson_number === lessonNum
     );
   };
 
   // --- DRAG & DROP Логіка ---
-
-  // Коли почали тягнути урок, запам'ятовуємо його ID
   const handleDragStart = (e: React.DragEvent, scheduleId: number) => {
     e.dataTransfer.setData('scheduleId', scheduleId.toString());
   };
 
-  // Дозволяємо "кидати" елементи над клітинкою
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
-  // Коли відпустили урок над клітинкою
   const handleDrop = async (e: React.DragEvent, targetDay: string, targetLessonNum: number) => {
     e.preventDefault();
     const scheduleId = e.dataTransfer.getData('scheduleId');
     if (!scheduleId) return;
 
-    // Шукаємо ID цільового часового слоту
     const targetSlot = timeSlots.find(
       (ts) => ts.day_of_week === targetDay && ts.lesson_number === targetLessonNum
     );
@@ -146,11 +143,9 @@ export default function SchedulePage() {
       return;
     }
 
-    // Шукаємо поточний урок, щоб зберегти його кабінет
     const currentLesson = schedules.find((s) => s.id.toString() === scheduleId);
     if (!currentLesson) return;
 
-    // Оптимістичне оновлення або блокування UI
     setIsLoading(true);
 
     try {
@@ -160,12 +155,10 @@ export default function SchedulePage() {
         reason: 'Ручне коригування розкладу (Drag & Drop)'
       });
 
-      // Якщо успішно, перезавантажуємо розклад (це також прибере isLoading)
       await fetchSchedule();
     } catch (err: any) {
-      // Якщо бекенд відхилив зміну (наприклад, конфлікт вчителя)
       const errorMsg = err.response?.data?.error || 'Помилка при перенесенні уроку.';
-      alert(`Відхилено: ${errorMsg}`); // Можна замінити на красивий Toast
+      alert(`Відхилено: ${errorMsg}`);
       setIsLoading(false);
     }
   };
@@ -257,39 +250,44 @@ export default function SchedulePage() {
                       {lessonNum}
                     </td>
                     {DAYS.map((day) => {
-                      const lesson = getLesson(day.key, lessonNum);
+                      // ВИПРАВЛЕНО: Отримуємо МАСИВ уроків
+                      const lessonsInCell = getLessons(day.key, lessonNum);
                       return (
                         <td
                           key={`${day.key}-${lessonNum}`}
-                          className="p-3 border-r border-gray-100 align-top h-28 border-dashed hover:bg-blue-50/50 transition-colors"
-                          // --- Додаємо обробники для зони падіння ---
+                          className="p-3 border-r border-gray-100 align-top min-h-[7rem] border-dashed hover:bg-blue-50/50 transition-colors"
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, day.key, lessonNum)}
                         >
-                          {lesson ? (
-                            <div
-                              // --- Робимо картку перетягуваною ---
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, lesson.id)}
-                              className="bg-blue-50 border border-blue-200 rounded-md p-3 h-full flex flex-col justify-between shadow-sm hover:shadow-md transition cursor-grab active:cursor-grabbing hover:border-blue-400"
-                            >
-                              <div>
-                                <div className="font-semibold text-blue-900 leading-tight">
-                                  {lesson.subject_name}
+                          {lessonsInCell.length > 0 ? (
+                            <div className="flex flex-col gap-2 h-full">
+                              {/* Рендеримо кожен урок як окрему картку */}
+                              {lessonsInCell.map((lesson) => (
+                                <div
+                                  key={lesson.id}
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, lesson.id)}
+                                  className="bg-blue-50 border border-blue-200 rounded-md p-3 flex flex-col justify-between shadow-sm hover:shadow-md transition cursor-grab active:cursor-grabbing hover:border-blue-400"
+                                >
+                                  <div>
+                                    <div className="font-semibold text-blue-900 leading-tight">
+                                      {lesson.subject_name}
+                                    </div>
+                                    <div className="text-xs text-blue-600 mt-1 font-medium">
+                                      {lesson.class_name}
+                                    </div>
+                                  </div>
+                                  <div className="flex justify-between items-end mt-2 text-xs text-gray-500">
+                                    <span className="truncate pr-2">{lesson.teacher_name}</span>
+                                    <span className="font-medium bg-white px-1.5 py-0.5 rounded shadow-sm text-gray-700 border border-gray-100">
+                                      Каб. {lesson.room_number}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="text-xs text-blue-600 mt-1 font-medium">
-                                  {lesson.class_name}
-                                </div>
-                              </div>
-                              <div className="flex justify-between items-end mt-2 text-xs text-gray-500">
-                                <span className="truncate pr-2">{lesson.teacher_name}</span>
-                                <span className="font-medium bg-white px-1.5 py-0.5 rounded shadow-sm text-gray-700 border border-gray-100">
-                                  Каб. {lesson.room_number}
-                                </span>
-                              </div>
+                              ))}
                             </div>
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-gray-300 text-xs italic">
+                            <div className="h-full w-full flex items-center justify-center text-gray-300 text-xs italic py-6">
                               Вільне вікно
                             </div>
                           )}

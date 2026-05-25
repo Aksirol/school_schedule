@@ -63,18 +63,28 @@ class ScheduleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def manual_move(self, request, pk=None):
-        """Z2: Ручне переміщення уроку (Drag & Drop) з фіксацією змін"""
+        """Z2: Ручне переміщення уроку (Drag & Drop) з повною перевіркою конфліктів"""
         schedule = self.get_object()
         new_time_slot_id = request.data.get('new_time_slot_id')
         new_room_id = request.data.get('new_room_id')
         reason = request.data.get('reason', 'Ручне перенесення розкладу')
 
-        # 1. Перевірка конфліктів (Спрощена версія для прикладу)
-        if Schedule.objects.filter(curriculum__teacher=schedule.curriculum.teacher,
-                                   time_slot_id=new_time_slot_id).exclude(id=schedule.id).exists():
-            return Response({"error": "Конфлікт: Вчитель вже має урок у цей час"}, status=status.HTTP_400_BAD_REQUEST)
+        # ПОВНА ПЕРЕВІРКА КОНФЛІКТІВ
+        teacher_conflict = Schedule.objects.filter(curriculum__teacher=schedule.curriculum.teacher,
+                                                   time_slot_id=new_time_slot_id).exclude(id=schedule.id).exists()
+        class_conflict = Schedule.objects.filter(curriculum__school_class=schedule.curriculum.school_class,
+                                                 time_slot_id=new_time_slot_id).exclude(id=schedule.id).exists()
+        room_conflict = Schedule.objects.filter(room_id=new_room_id, time_slot_id=new_time_slot_id).exclude(
+            id=schedule.id).exists()
 
-        # 2. Фіксація в журналі змін (ScheduleChanges), якщо розклад вже опубліковано
+        if teacher_conflict:
+            return Response({"error": "Конфлікт: Вчитель вже має урок у цей час"}, status=status.HTTP_400_BAD_REQUEST)
+        if class_conflict:
+            return Response({"error": "Конфлікт: Клас вже має урок у цей час"}, status=status.HTTP_400_BAD_REQUEST)
+        if room_conflict:
+            return Response({"error": "Конфлікт: Кабінет вже зайнятий у цей час"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Фіксація в журналі змін
         if schedule.is_published:
             ScheduleChange.objects.create(
                 schedule=schedule,
@@ -85,11 +95,10 @@ class ScheduleViewSet(viewsets.ModelViewSet):
                 changed_by=request.user
             )
 
-        # 3. Оновлення самого запису
         schedule.time_slot_id = new_time_slot_id
         if new_room_id:
             schedule.room_id = new_room_id
-        schedule.save()
+        schedule.save()  # Тепер це викличе clean(), що є додатковою страховкою
 
         return Response({'status': 'moved_successfully'})
 

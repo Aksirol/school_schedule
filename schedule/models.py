@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
 
 class Teacher(models.Model):
     first_name = models.CharField(max_length=50, verbose_name="Ім'я")
@@ -94,9 +95,25 @@ class Schedule(models.Model):
     curriculum = models.ForeignKey(Curriculum, on_delete=models.CASCADE)
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
     time_slot = models.ForeignKey(TimeSlot, on_delete=models.CASCADE)
-    week_number = models.IntegerField(null=True, blank=True) # Для гнучкості розкладу
+    week_number = models.IntegerField(null=True, blank=True)
     is_published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
+
+    def clean(self):
+        """Захист бази даних від дублювання (Конфлікти)"""
+        # 1. Конфлікт кабінету
+        if Schedule.objects.filter(room=self.room, time_slot=self.time_slot).exclude(id=self.id).exists():
+            raise ValidationError("Цей кабінет вже зайнятий у цей час.")
+        # 2. Конфлікт вчителя
+        if Schedule.objects.filter(curriculum__teacher=self.curriculum.teacher, time_slot=self.time_slot).exclude(id=self.id).exists():
+            raise ValidationError("Вчитель вже має урок у цей час.")
+        # 3. Конфлікт класу
+        if Schedule.objects.filter(curriculum__school_class=self.curriculum.school_class, time_slot=self.time_slot).exclude(id=self.id).exists():
+            raise ValidationError("Цей клас вже має урок у цей час.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.curriculum.school_class} - {self.curriculum.subject} ({self.time_slot})"

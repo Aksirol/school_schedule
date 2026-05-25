@@ -41,8 +41,11 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost/api
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Ось цей рядок КРИТИЧНО важливий. Він екранує node_modules хоста.
-      - /app/.next       # Також ізолюємо папку збірки Next.js, щоб уникнути конфліктів
+      # Іменовані volumes "перекривають" хостові папки всередині контейнера.
+      # node_modules встановлені під linux-x64-musl під час збірки образу —
+      # вони ніколи не замінюються файлами з хост-машини.
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
     depends_on:
       - web
 
@@ -79,3 +82,5 @@ volumes:
   postgres_data:
   static_volume:
   media_volume:
+  frontend_node_modules:
+  frontend_next:

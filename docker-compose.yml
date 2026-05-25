@@ -33,6 +33,19 @@ services:
       redis:
         condition: service_started
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Ось цей рядок КРИТИЧНО важливий. Він екранує node_modules хоста.
+      - /app/.next       # Також ізолюємо папку збірки Next.js, щоб уникнути конфліктів
+    depends_on:
+      - web
+
   nginx:
     image: nginx:1.25-alpine
     volumes:

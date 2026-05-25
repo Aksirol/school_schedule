@@ -1,7 +1,8 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from .models import (Teacher, AcademicYear, SchoolClass, Subject, Room,
-                     TimeSlot, Curriculum, TeacherAvailability)
+                     TimeSlot, Curriculum, TeacherAvailability,
+                     Schedule, ScheduleChange)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -84,4 +85,30 @@ class CurriculumSerializer(serializers.ModelSerializer):
 class TeacherAvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = TeacherAvailability
+        fields = '__all__'
+
+class ScheduleReadSerializer(serializers.ModelSerializer):
+    # Вкладені дані для зручного відображення на фронтенді
+    subject_name = serializers.ReadOnlyField(source='curriculum.subject.name')
+    teacher_name = serializers.ReadOnlyField(source='curriculum.teacher.last_name')
+    class_name = serializers.ReadOnlyField(source='curriculum.school_class.name')
+    room_number = serializers.ReadOnlyField(source='room.room_number')
+    day_of_week = serializers.ReadOnlyField(source='time_slot.day_of_week')
+    lesson_number = serializers.ReadOnlyField(source='time_slot.lesson_number')
+
+    class Meta:
+        model = Schedule
+        fields = '__all__'
+
+class ScheduleWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Schedule
+        fields = '__all__'
+
+class ScheduleChangeSerializer(serializers.ModelSerializer):
+    changed_by_name = serializers.ReadOnlyField(source='changed_by.username')
+    schedule_details = serializers.ReadOnlyField(source='schedule.__str__')
+
+    class Meta:
+        model = ScheduleChange
         fields = '__all__'

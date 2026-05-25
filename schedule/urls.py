@@ -7,6 +7,7 @@ from .views import (TeacherViewSet, AcademicYearViewSet, SchoolClassViewSet,
                     SubjectViewSet, RoomViewSet, TimeSlotViewSet,
                     CurriculumViewSet, TeacherAvailabilityViewSet,
                     GenerateScheduleView)
+from .views import ScheduleViewSet, ScheduleChangeViewSet
 
 # Реєстрація роутера
 router = DefaultRouter()
@@ -18,6 +19,8 @@ router.register(r'rooms', RoomViewSet)
 router.register(r'timeslots', TimeSlotViewSet)
 router.register(r'curriculums', CurriculumViewSet)
 router.register(r'availabilities', TeacherAvailabilityViewSet)
+router.register(r'schedules', ScheduleViewSet)
+router.register(r'schedule-changes', ScheduleChangeViewSet)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):

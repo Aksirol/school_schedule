@@ -246,10 +246,12 @@ class TeacherAvailabilityViewSet(viewsets.ModelViewSet):
     serializer_class = TeacherAvailabilitySerializer
 
     def get_permissions(self):
-        """Вчитель може створювати свої обмеження, Адмін/Заступник бачать всі"""
+        """Вчитель може створювати свої обмеження, Адмін/Заступник можуть редагувати всі"""
         if self.request.method in permissions.SAFE_METHODS:
-            return [IsAuthenticated()]  # або кастомний пермішн
-        return [IsTeacher()]  # Змінювати можуть лише вчителі
+            return [IsAuthenticated()]
+
+        # Оператор | (АБО) дозволить доступ, якщо хоча б одна умова виконується
+        return [IsTeacher() | IsDeputyOrAdmin()]
 
 
 class GenerateScheduleView(APIView):

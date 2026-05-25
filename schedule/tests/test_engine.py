@@ -66,7 +66,7 @@ class EngineTests(TestCase):
         self.assertEqual(result['status'], 'partial')
         self.assertEqual(result['lessons_scheduled'], 1)
         self.assertEqual(len(result['unresolved_conflicts']), 1)
-        self.assertIn("Не вдалося знайти місце для", result['unresolved_conflicts'][0])
+        self.assertIn("Не знайдено слот:", result['unresolved_conflicts'][0])
 
     def test_teacher_availability(self):
         """Тест: Врахування недоступності вчителя (TeacherAvailability)"""

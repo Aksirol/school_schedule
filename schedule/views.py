@@ -8,6 +8,10 @@ from .serializers import (TeacherSerializer, AcademicYearSerializer, SchoolClass
                           CurriculumSerializer, TeacherAvailabilitySerializer)
 from .permissions import IsAdminUserRole, IsDeputyOrAdmin, IsTeacher, IsPublicReadOnly
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from celery.result import AsyncResult
+from .tasks import run_schedule_generation
 
 class TeacherViewSet(viewsets.ModelViewSet):
     queryset = Teacher.objects.all()
@@ -60,3 +64,23 @@ class TeacherAvailabilityViewSet(viewsets.ModelViewSet):
         if self.request.method in permissions.SAFE_METHODS:
             return [IsAuthenticated()]  # або кастомний пермішн
         return [IsTeacher()]  # Змінювати можуть лише вчителі
+
+
+class GenerateScheduleView(APIView):
+    permission_classes = [IsDeputyOrAdmin]
+
+    def post(self, request, year_id):
+        """Запуск фонової генерації"""
+        task = run_schedule_generation.delay(year_id)
+        return Response({'task_id': task.id, 'status': 'PROCESSING'}, status=202)
+
+    def get(self, request, task_id):
+        """Перевірка статусу виконання"""
+        task_result = AsyncResult(task_id)
+
+        response_data = {
+            'task_id': task_id,
+            'status': task_result.status,
+            'result': task_result.result if task_result.ready() else None
+        }
+        return Response(response_data)

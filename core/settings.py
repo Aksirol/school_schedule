@@ -169,3 +169,8 @@ SIMPLE_JWT = {
 
 # CORS Налаштування (Дозволяємо всім під час розробки, потім змінимо для продакшену)
 CORS_ALLOW_ALL_ORIGINS = config('DEBUG', default=False, cast=bool)
+
+CELERY_BROKER_URL = config('CELERY_BROKER_URL')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'

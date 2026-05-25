@@ -5,7 +5,8 @@ from .serializers import CustomTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .views import (TeacherViewSet, AcademicYearViewSet, SchoolClassViewSet,
                     SubjectViewSet, RoomViewSet, TimeSlotViewSet,
-                    CurriculumViewSet, TeacherAvailabilityViewSet)
+                    CurriculumViewSet, TeacherAvailabilityViewSet,
+                    GenerateScheduleView)
 
 # Реєстрація роутера
 router = DefaultRouter()
@@ -29,5 +30,10 @@ urlpatterns = [
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Підключення CRUD ендпоінтів
+    path('', include(router.urls)),
+
+    path('generate/<int:year_id>/', GenerateScheduleView.as_view(), name='trigger-generation'),
+    path('generate/status/<str:task_id>/', GenerateScheduleView.as_view(), name='status-generation'),
+
     path('', include(router.urls)),
 ]

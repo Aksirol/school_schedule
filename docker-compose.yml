@@ -9,6 +9,12 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     ports:
       - "5432:5432"
+    # Додаємо healthcheck
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   web:
     build: .
@@ -22,7 +28,8 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy # Чекаємо, поки БД буде "healthy"
 
   nginx:
     image: nginx:1.25-alpine

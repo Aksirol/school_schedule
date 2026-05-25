@@ -19,6 +19,17 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import Schedule, ScheduleChange, TimeSlot, Room
 from .serializers import ScheduleReadSerializer, ScheduleWriteSerializer, ScheduleChangeSerializer
 
+import openpyxl
+from django.http import HttpResponse
+from django.db.models import Sum
+from rest_framework.views import APIView
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+
 
 class ScheduleViewSet(viewsets.ModelViewSet):
     queryset = Schedule.objects.all().select_related('curriculum__subject', 'curriculum__teacher',
@@ -81,6 +92,96 @@ class ScheduleViewSet(viewsets.ModelViewSet):
         schedule.save()
 
         return Response({'status': 'moved_successfully'})
+
+    @action(detail=False, methods=['get'], url_path='export/xlsx')
+    def export_xlsx(self, request):
+        """Експорт розкладу у формат Excel"""
+        class_id = request.query_params.get('class_id')
+        queryset = self.filter_queryset(self.get_queryset().filter(is_published=True))
+
+        if class_id:
+            queryset = queryset.filter(curriculum__school_class_id=class_id)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Розклад"
+
+        # Заголовки колонок
+        headers = ['День', 'Урок', 'Клас', 'Предмет', 'Вчитель', 'Кабінет']
+        ws.append(headers)
+
+        for item in queryset.order_by('time_slot__day_of_week', 'time_slot__lesson_number'):
+            ws.append([
+                item.time_slot.get_day_of_week_display(),
+                item.time_slot.lesson_number,
+                item.curriculum.school_class.name,
+                item.curriculum.subject.name,
+                f"{item.curriculum.teacher.last_name} {item.curriculum.teacher.first_name}",
+                item.room.room_number
+            ])
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="schedule.xlsx"'
+        wb.save(response)
+        return response
+
+    @action(detail=False, methods=['get'], url_path='export/pdf')
+    def export_pdf(self, request):
+        """Експорт розкладу у формат PDF з підтримкою кирилиці"""
+        class_id = request.query_params.get('class_id')
+        queryset = self.filter_queryset(self.get_queryset().filter(is_published=True))
+
+        if class_id:
+            queryset = queryset.filter(curriculum__school_class_id=class_id)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="schedule.pdf"'
+
+        # Реєстрація шрифту DejaVu для правильного відображення української мови
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+            font_name = 'DejaVu'
+        except Exception as e:
+            font_name = 'Helvetica'  # Резервний варіант
+
+        doc = SimpleDocTemplate(response, pagesize=A4)
+        elements = []
+
+        styles = getSampleStyleSheet()
+        styleH = styles['Heading1']
+        styleH.fontName = font_name
+
+        elements.append(Paragraph("Зведений розклад занять", styleH))
+
+        # Формування даних таблиці
+        data = [['День', 'Урок', 'Клас', 'Предмет', 'Вчитель', 'Каб.']]
+        for item in queryset.order_by('time_slot__day_of_week', 'time_slot__lesson_number'):
+            data.append([
+                item.time_slot.get_day_of_week_display(),
+                str(item.time_slot.lesson_number),
+                item.curriculum.school_class.name,
+                item.curriculum.subject.name,
+                item.curriculum.teacher.last_name,
+                item.room.room_number
+            ])
+
+        # Стилізація таблиці
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),  # Синій заголовок
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, -1), font_name),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f8fafc')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0'))
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+
+        return response
 
 
 class ScheduleChangeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -160,3 +261,28 @@ class GenerateScheduleView(APIView):
             'result': task_result.result if task_result.ready() else None
         }
         return Response(response_data)
+
+
+class TeacherLoadReportView(APIView):
+    permission_classes = [IsDeputyOrAdmin]
+
+    def get(self, request):
+        """Z4: Звіт навантаження вчителів (порівняння з нормативом 18 годин)"""
+        # Агрегуємо години по кожному вчителю з навчального плану
+        teachers = Teacher.objects.annotate(
+            total_hours=Sum('curriculum__hours_per_week')
+        )
+
+        report_data = []
+        for teacher in teachers:
+            hours = teacher.total_hours or 0
+            norm = 18  # Стандартна ставка вчителя
+            report_data.append({
+                'teacher_id': teacher.id,
+                'name': f"{teacher.last_name} {teacher.first_name}",
+                'total_hours': hours,
+                'norm_hours': norm,
+                'difference': hours - norm  # Позитивне число = перепрацювання, негативне = недобір
+            })
+
+        return Response(report_data)

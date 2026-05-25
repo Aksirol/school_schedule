@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .views import (TeacherViewSet, AcademicYearViewSet, SchoolClassViewSet,
                     SubjectViewSet, RoomViewSet, TimeSlotViewSet,
                     CurriculumViewSet, TeacherAvailabilityViewSet,
-                    GenerateScheduleView)
+                    GenerateScheduleView, TeacherLoadReportView)
 from .views import ScheduleViewSet, ScheduleChangeViewSet
 
 # Реєстрація роутера
@@ -37,6 +37,9 @@ urlpatterns = [
 
     path('generate/<int:year_id>/', GenerateScheduleView.as_view(), name='trigger-generation'),
     path('generate/status/<str:task_id>/', GenerateScheduleView.as_view(), name='status-generation'),
+
+    # Новий ендпоінт для звіту
+    path('reports/teacher-load/', TeacherLoadReportView.as_view(), name='report-teacher-load'),
 
     path('', include(router.urls)),
 ]

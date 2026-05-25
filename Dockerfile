@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Встановлення системних залежностей для компіляції psycopg2
 RUN apt-get update \
-    && apt-get install -y gcc libpq-dev \
+    && apt-get install -y gcc libpq-dev fonts-dejavu-core \
     && apt-get clean
 
 COPY requirements.txt /app/

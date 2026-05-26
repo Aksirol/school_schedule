@@ -17,6 +17,8 @@ services:
       retries: 5
 
   web:
+    restart: on-failure:5
+    # healthcheck для web прибираємо — Gunicorn стабільно стартує сам
     build: .
     command: gunicorn core.wsgi:application --bind 0.0.0.0:8000
     volumes:
@@ -29,7 +31,7 @@ services:
       - .env
     depends_on:
       db:
-        condition: service_healthy # Чекаємо, поки БД буде "healthy"
+        condition: service_healthy
       redis:
         condition: service_started
 

@@ -35,6 +35,12 @@ interface TimeSlot {
   lesson_number: number;
 }
 
+// ДОДАНО: Інтерфейс для навчального року
+interface AcademicYear {
+  id: number;
+  name: string;
+}
+
 const DAYS = [
   { key: 'MON', label: 'Понеділок' },
   { key: 'TUE', label: 'Вівторок' },
@@ -56,22 +62,37 @@ export default function SchedulePage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]); // ДОДАНО
 
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>(''); // ДОДАНО
 
   // 1. Завантаження довідників
   useEffect(() => {
     const fetchFilters = async () => {
       try {
-        const [classesRes, teachersRes, slotsRes] = await Promise.all([
+        // ДОДАНО: запит до /academic-years/
+        const [classesRes, teachersRes, slotsRes, yearsRes] = await Promise.all([
           api.get('/classes/'),
           api.get('/teachers/'),
-          api.get('/timeslots/')
+          api.get('/timeslots/'),
+          api.get('/academic-years/')
         ]);
-        setClasses(classesRes.data);
-        setTeachers(teachersRes.data);
-        setTimeSlots(slotsRes.data);
+
+        setClasses(classesRes.data.results || classesRes.data);
+        setTeachers(teachersRes.data.results || teachersRes.data);
+        setTimeSlots(slotsRes.data.results || slotsRes.data);
+
+        // ДОДАНО: обробка навчальних років
+        const yearsData = yearsRes.data.results || yearsRes.data;
+        setAcademicYears(yearsData);
+
+        // Автоматично вибираємо найсвіжіший (останній) рік, якщо він є
+        if (yearsData.length > 0) {
+          setSelectedYear(yearsData[yearsData.length - 1].id.toString());
+        }
+
       } catch (err) {
         console.error('Помилка завантаження довідників', err);
       }
@@ -81,22 +102,27 @@ export default function SchedulePage() {
 
   // 2. Завантаження розкладу
   const fetchSchedule = useCallback(async () => {
+    if (!selectedYear) return; // Чекаємо, поки завантажиться і встановиться рік
+
     setIsLoading(true);
     setError('');
     try {
       const params = new URLSearchParams({ is_published: 'true' });
+
+      // ДОДАНО: фільтрація по року (використовуємо стандартний фільтр DRF)
+      params.append('curriculum__academic_year', selectedYear);
+
       if (selectedClass) params.append('curriculum__school_class', selectedClass);
       if (selectedTeacher) params.append('curriculum__teacher', selectedTeacher);
 
       const response = await api.get(`/schedules/?${params.toString()}`);
-      // Підтримка пагінації (results) або звичайного масиву
       setSchedules(response.data.results || response.data);
     } catch (err) {
       setError('Не вдалося завантажити розклад. Перевірте з\'єднання.');
     } finally {
       setIsLoading(false);
     }
-  }, [selectedClass, selectedTeacher]);
+  }, [selectedClass, selectedTeacher, selectedYear]);
 
   useEffect(() => {
     const token = Cookies.get('access_token');
@@ -113,7 +139,6 @@ export default function SchedulePage() {
     router.push('/');
   };
 
-  // ВИПРАВЛЕНО: Тепер повертає масив усіх уроків для конкретної клітинки
   const getLessons = (day: string, lessonNum: number) => {
     return schedules.filter(
       (s) => s.day_of_week === day && s.lesson_number === lessonNum
@@ -180,6 +205,21 @@ export default function SchedulePage() {
 
         {/* Панель фільтрів */}
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-end">
+
+          {/* ДОДАНО: Селектор Навчального року */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Навчальний рік</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-semibold bg-gray-50"
+            >
+              {academicYears.map((y) => (
+                <option key={y.id} value={y.id}>{y.name}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 mb-1">Фільтр по класу</label>
             <select
@@ -250,7 +290,6 @@ export default function SchedulePage() {
                       {lessonNum}
                     </td>
                     {DAYS.map((day) => {
-                      // ВИПРАВЛЕНО: Отримуємо МАСИВ уроків
                       const lessonsInCell = getLessons(day.key, lessonNum);
                       return (
                         <td
@@ -261,7 +300,6 @@ export default function SchedulePage() {
                         >
                           {lessonsInCell.length > 0 ? (
                             <div className="flex flex-col gap-2 h-full">
-                              {/* Рендеримо кожен урок як окрему картку */}
                               {lessonsInCell.map((lesson) => (
                                 <div
                                   key={lesson.id}

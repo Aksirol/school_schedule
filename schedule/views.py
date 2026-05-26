@@ -206,9 +206,13 @@ class TeacherViewSet(viewsets.ModelViewSet):
 
 
 class AcademicYearViewSet(viewsets.ModelViewSet):
-    queryset = AcademicYear.objects.all()
+    queryset = AcademicYear.objects.all().order_by('start_date')
     serializer_class = AcademicYearSerializer
-    permission_classes = [IsAdminUserRole]  # Тільки адмін керує роками
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]  # будь-який залогінений може читати
+        return [IsAdmin()]              # створення/зміна/видалення — тільки адмін
 
 
 class SchoolClassViewSet(viewsets.ModelViewSet):
@@ -232,7 +236,11 @@ class RoomViewSet(viewsets.ModelViewSet):
 class TimeSlotViewSet(viewsets.ModelViewSet):
     queryset = TimeSlot.objects.all().order_by('day_of_week', 'lesson_number')
     serializer_class = TimeSlotSerializer
-    permission_classes = [IsAdminUserRole]  # Тільки адмін налаштовує слоти дзвінків
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]  # будь-який залогінений може читати
+        return [IsAdmin()]              # створення/зміна/видалення — тільки адмін
 
 
 class CurriculumViewSet(viewsets.ModelViewSet):
